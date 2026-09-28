@@ -3,6 +3,13 @@
 **lateralWheelie** es una aplicación Android de telemetría para motocicleta centrada en la inclinación, el análisis de curvas y el registro de rutas. Utiliza los sensores del teléfono y el GPS para mostrar información de conducción en tiempo real y conservar el historial de cada sesión.
 
 La aplicación funciona de forma independiente: no necesita una motocicleta Honda, RoadSync ni hardware propietario. La integración con **Honda BTU** es opcional y puede utilizarse como referencia Bluetooth para automatizar el inicio y la parada de una ruta.
+<p align="center">
+  <img
+    src="<img width="939" height="2048" alt="lW" src="https://github.com/user-attachments/assets/fe747275-fd1d-42bd-a5cf-647fa9ad22d7" />
+"
+    alt="lateralWheelie"
+    width="280">
+</p>
 
 ## Funciones principales
 
