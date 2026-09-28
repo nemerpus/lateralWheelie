@@ -1,0 +1,210 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+html,body,#map{height:100%;width:100%;margin:0;background:#04080c;overflow:hidden}
+body{font-family:system-ui,-apple-system,sans-serif}
+.maplibregl-ctrl-attrib{font-size:8px!important;background:#05090dcc!important;color:#d7e0e8!important}
+.badge{position:absolute;z-index:8;left:9px;top:9px;background:#05090ddd;color:#fff;border:1px solid #ff3044;border-radius:11px;padding:6px 9px;font:700 10px sans-serif;letter-spacing:.25px}
+.modes{position:absolute;z-index:8;right:9px;top:9px;display:flex;gap:5px}
+.modes button{border:1px solid #38566d;border-radius:9px;background:#07141ddd;color:#d8e4ec;padding:6px 8px;font:700 9px sans-serif}
+.modes button.active{border-color:#ff3044;color:#fff;background:#251016e8}
+.hint{position:absolute;z-index:8;right:9px;bottom:27px;background:#05090dcc;color:#b9c8d3;border-radius:8px;padding:4px 7px;font:9px sans-serif}
+.status{position:absolute;z-index:8;left:50%;top:50%;transform:translate(-50%,-50%);max-width:80%;text-align:center;color:#91a9c2;background:#05090ddd;border:1px solid #243a4b;border-radius:12px;padding:10px 14px;font:12px sans-serif}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="badge" class="badge">SATÉLITE · PERSPECTIVA</div>
+<div class="modes">
+  <button id="satBtn" class="active" onclick="lwBase('sat')">SATÉLITE</button>
+  <button id="streetBtn" onclick="lwBase('street')">CALLE</button>
+</div>
+<div class="hint">Arrastra · pellizca · gira</div>
+<div id="status" class="status">Esperando puntos GPS…</div>
+
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.7.1/dist/maplibre-gl.js"></script>
+<script>
+'use strict';
+
+let mapReady=false;
+let fitted=false;
+let currentBase='sat';
+let satErrors=0;
+let lastPoints=[];
+
+const style={
+  version:8,
+  sources:{
+    sat:{
+      type:'raster',
+      tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+      tileSize:256,
+      attribution:'Imagery © Esri',
+      maxzoom:19
+    },
+    street:{
+      type:'raster',
+      tiles:[
+        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+      ],
+      tileSize:256,
+      attribution:'© OpenStreetMap contributors © CARTO',
+      maxzoom:20
+    }
+  },
+  layers:[
+    {id:'sat',type:'raster',source:'sat',paint:{
+      'raster-saturation':-.08,
+      'raster-contrast':.08,
+      'raster-brightness-max':.82,
+      'raster-fade-duration':0
+    }},
+    {id:'street',type:'raster',source:'street',layout:{visibility:'none'},paint:{
+      'raster-brightness-max':.84,
+      'raster-fade-duration':0
+    }}
+  ]
+};
+
+const map=new maplibregl.Map({
+  container:'map',
+  style:style,
+  center:[-8.41,43.36],
+  zoom:10,
+  pitch:48,
+  bearing:-14,
+  antialias:false,
+  attributionControl:true,
+  fadeDuration:0,
+  refreshExpiredTiles:false
+});
+
+function heat(a){
+  a=Math.min(70,Math.abs(a||0));
+  if(a<20)return '#31e6b7';
+  if(a<35)return '#d7ef42';
+  if(a<50)return '#ffad22';
+  return '#ff3044';
+}
+
+function setStatus(text){
+  const el=document.getElementById('status');
+  if(!text){el.style.display='none';return;}
+  el.textContent=text;
+  el.style.display='block';
+}
+
+window.lwBase=function(mode){
+  if(!mapReady)return;
+  currentBase=mode==='street'?'street':'sat';
+  map.setLayoutProperty('sat','visibility',currentBase==='sat'?'visible':'none');
+  map.setLayoutProperty('street','visibility',currentBase==='street'?'visible':'none');
+  document.getElementById('satBtn').classList.toggle('active',currentBase==='sat');
+  document.getElementById('streetBtn').classList.toggle('active',currentBase==='street');
+  document.getElementById('badge').textContent=currentBase==='sat'?'SATÉLITE · PERSPECTIVA':'CALLE · RESPALDO';
+};
+
+function routeData(p){
+  const features=[];
+  for(let i=1;i<p.length;i++){
+    features.push({
+      type:'Feature',
+      properties:{color:heat(p[i][2])},
+      geometry:{type:'LineString',coordinates:[[p[i-1][0],p[i-1][1]],[p[i][0],p[i][1]]]}
+    });
+  }
+  return {type:'FeatureCollection',features:features};
+}
+
+function endsData(p){
+  if(p.length<1)return {type:'FeatureCollection',features:[]};
+  const out=[{
+    type:'Feature',properties:{color:'#31e6b7'},
+    geometry:{type:'Point',coordinates:[p[0][0],p[0][1]]}
+  }];
+  if(p.length>1)out.push({
+    type:'Feature',properties:{color:'#ff3044'},
+    geometry:{type:'Point',coordinates:[p[p.length-1][0],p[p.length-1][1]]}
+  });
+  return {type:'FeatureCollection',features:out};
+}
+
+function updateRoute(p){
+  lastPoints=Array.isArray(p)?p:[];
+  if(!mapReady)return;
+
+  const route=map.getSource('route');
+  const ends=map.getSource('ends');
+  if(route)route.setData(routeData(lastPoints));
+  if(ends)ends.setData(endsData(lastPoints));
+
+  if(lastPoints.length===0){
+    setStatus('Sin puntos GPS todavía');
+    return;
+  }
+  if(lastPoints.length===1){
+    setStatus('Esperando una segunda posición GPS…');
+    return;
+  }
+  setStatus('');
+
+  // Fit only once. Live updates no longer reset camera/zoom/pitch.
+  if(!fitted){
+    const b=new maplibregl.LngLatBounds(
+      [lastPoints[0][0],lastPoints[0][1]],
+      [lastPoints[0][0],lastPoints[0][1]]
+    );
+    for(const x of lastPoints)b.extend([x[0],x[1]]);
+    map.fitBounds(b,{padding:38,pitch:48,bearing:-14,duration:0,maxZoom:16});
+    fitted=true;
+  }
+}
+
+window.lwSetPoints=function(p){updateRoute(p);};
+
+map.on('load',()=>{
+  mapReady=true;
+  map.addSource('route',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({
+    id:'route',
+    type:'line',
+    source:'route',
+    layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-color':['get','color'],'line-width':5,'line-opacity':.96}
+  });
+  map.addSource('ends',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({
+    id:'ends',
+    type:'circle',
+    source:'ends',
+    paint:{
+      'circle-radius':6,
+      'circle-color':['get','color'],
+      'circle-stroke-width':2,
+      'circle-stroke-color':'#ffffff'
+    }
+  });
+
+  if(window.lwNativeData)updateRoute(window.lwNativeData);
+  else updateRoute(lastPoints);
+});
+
+// Satellite failures fall back to street instead of repeatedly retrying/repainting.
+map.on('error',(e)=>{
+  if(currentBase==='sat' && e && e.sourceId==='sat'){
+    satErrors++;
+    if(satErrors>=5){
+      lwBase('street');
+      document.getElementById('badge').textContent='CALLE · RESPALDO AUTOMÁTICO';
+    }
+  }
+});
+</script>
+</body>
+</html>

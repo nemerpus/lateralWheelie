@@ -1,0 +1,47 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+local.properties
+
+# Android
+captures/
+.externalNativeBuild/
+.cxx/
+
+# APK / bundles generados
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Signing / secretos
+*.jks
+*.keystore
+keystore.properties
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# VS Code
+.vscode/
+
+# Release packages generated locally
+dist/
+release/
+releases/
