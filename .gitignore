@@ -45,3 +45,6 @@ desktop.ini
 dist/
 release/
 releases/
+
+# Herramientas descargadas localmente
+.tools/
